@@ -57,24 +57,6 @@ commentz
    sequence="100"
    group="triggers"
   >
-  </trigger>A Steward of Time says, "Fair winds to you."
-  <trigger
-   enabled="n"
-   match="^A Steward of Time says, &quot;Fair winds to you.&quot;$"
-   regexp="y"
-   script="enable_time_catch"
-   sequence="100"
-   group="triggers"
-  >
-  </trigger>
-  <trigger
-   enabled="n"
-   match="^.+it will take about (?<hours>\d+):(?<mins>\d+):(?<secs>\d+) hours. That sukz, I know!&quot;$"
-   regexp="y"
-   sequence="100"
-   script="winds_timer"
-   name="winds_time_catch"
-  >
   </trigger>
   <trigger
    enabled="y"
@@ -118,9 +100,42 @@ commentz
    regexp="y"
    script="got_pebble"
    sequence="100"
+   ignore_case="y"
    group="triggers"
   >
   </trigger>
+
+  <trigger
+   enabled="n"
+   match="^You place your hands on the worn obelisk, suddenly a fine glow envelops you and sends you someplace else!$"
+   regexp="y"
+   script="start_time"
+   sequence="100"
+   omit_from_output="n"
+   group="triggers"
+  >
+  </trigger>
+  <trigger
+   enabled="n"
+   match="^Lord Orittias, the Betrayer says 'You have defeated me .+. I did not think that was possible\. You truly are a defender of Aardwolf\.'$"
+   regexp="y"
+   script="end_time"
+   sequence="100"
+   omit_from_output="n"
+   group="triggers"
+  >
+  </trigger>
+  <trigger
+   enabled="n"
+   match="^Hynes, the Giver of Gifts exclaims, &quot;Good showing! You are truly in charge of your own destiny!&quot;$"
+   regexp="y"
+   script="set_cooldown"
+   sequence="100"
+   omit_from_output="n"
+   group="triggers"
+  >
+  </trigger>
+  
   <trigger
    enabled="y"
    match="^You have the following cards stored:$"
@@ -289,7 +304,6 @@ end
 
 chan = "gtell :"
 dupes_chan = ""
-winds = tonumber(GetVariable("winds")) or "unknown"
 room_info = 1
 char_status = 1
 group = 1
@@ -301,6 +315,8 @@ search_list = ""
 obelisk_room = "39999" --"39999"
 show_missing = tonumber(GetVariable("show_missing")) or 1
 dont_rename = false
+start = tonumber(GetVariable("start")) or os.time()
+cooldown = tonumber(GetVariable("cooldown")) or "unknown"
 
 -- Collector Case
 cards1 = {"Alessandrew", "Domain", "Original", "Alhena", "Evie", "Quadrapus", "Androg", "FatesDagger", "Rafaele", "Ani", "Galinthas", "Rau", "Bejito", "Gren", "Rezit", "Blurp", "Hank", "Rocky", "Bonjour", "Hiroki", "Ruiner", "Cadaver", "Jennie", "Saartje", "Cartman", "Leaf", "Speedster", "Chuft", "Linoge", "Stormlord", "Cordelia", "Lumina", "Tirica", "Craven", "Madcatz", "TrEz", "Curi", "Madrox", "Trollemite", "Dagonet", "Majic", "Vanion", "Dave", "Marauder", "Whisper", "Demonspawn", "Marc", "Wojmil", "Dereliction", "Moolb", "Yowza", "Dexter", "Ninja", "Zolstead", "DjVoltron", "Oladon"}
@@ -373,6 +389,69 @@ function in_table(t, val)
 		end
 	end
 	return false
+end
+
+function start_time()
+	start = os.time()
+	SaveState()
+end
+
+function end_time()
+	local msg = chan.."@Y>> @x075Winds of Fate @Y>> @wFinished in @W"..total_time(os.time() - start, true).."@w.$C"
+	Send(msg)
+end
+
+function total_time(total_seconds, show_sec)
+	--Note("delta: "..delta)
+	local days, hours, minutes, seconds = 0, 0, 0, 0
+	if total_seconds > 60 * 60 * 24 then  -- day or more
+		days = math.floor(total_seconds / (60 * 60 * 24))
+	end
+	--Note("days "..days)
+	if total_seconds > 60 * 60 then -- hours
+		hours = math.floor((total_seconds - (60 * 60 * 24 * days)) / 60 / 60)
+	end
+	--Note("hours "..hours)
+	if total_seconds > 60 then -- minutes
+		minutes =  math.floor((total_seconds - (60 * 60 * 24 * days) - (60 * 60 * hours)) / 60)
+	end
+	--Note("minutes "..minutes)
+	seconds = math.floor(total_seconds - (60 * 60 * 24 * days) - (60 * 60 * hours) - (60 * minutes))
+	--Note("seconds "..seconds)
+	local time_str = ""
+	if days > 0 then
+		if show_sec then
+			if seconds > 0 then
+				return days.."d,"..hours.."h,"..minutes.."m,"..seconds.."s"
+			else
+				return days.."d,"..hours.."h,"..minutes.."m"
+			end
+		else
+			return days.."d,"..hours.."h,"..minutes.."m"
+		end
+	elseif hours > 0 then
+		if show_sec then
+			if seconds > 0 then
+				return hours.."h,"..minutes.."m,"..seconds.."s"
+			else
+				return hours.."h,"..minutes.."m"
+			end
+		else
+			return hours.."h,"..minutes.."m"
+		end
+	elseif minutes > 0 then
+		if show_sec then
+			if seconds > 0 then
+				return minutes.."m,"..seconds.."s"
+			else
+				return minutes.."m"
+			end
+		else
+			return minutes.."m"
+		end
+	else
+		return seconds.."s"
+	end
 end
 
 function start_case()
@@ -484,37 +563,30 @@ function got_pebble(name, line, args)
 	if not sitter then
 		return
 	end
-	local msg = chan.."@Y>> @x075Winds of Fate @Y>> @wPebble was given to @W"..args.who..args.m..args.e.."@w.$C"
+	local msg = chan.."@Y>> @x075Winds of Fate @Y>> @wPebble was given to @W"..args.who..string.upper(args.m)..args.e.."@w.$C"
 	Send(msg)
 		--ColourNote("#FBFF00", "", "\n >> ", "#9AC7FE", "", "Winds of Fate", "#FBFF00", "", " >> ", "silver", "", "Pebble was given to ", "white", "", args.who, "silver", "", ".\n")
-end
-
-function enable_time_catch()
-	EnableTrigger("winds_time_catch", true)
-end
-
-function winds_timer(name, line, args)
-	EnableTrigger("winds_time_catch", false)
-	local now = os.time()
-	local at = os.time() + args.hours * 60 * 60 + args.mins * 60 + args.secs
-	winds = at
-	SaveState()
-	DoAfterSpecial(.2, "report_winds()", 12)
 end
 
 function report_sides()
 	report(side)
 end
 
+function set_cooldown()
+	cooldown = os.time() + 30 * 60 * 60
+	SaveState()
+	DoAfterSpecial(1, "report_winds()", 12)
+end
+
 function report_winds()
-	if winds == "unknown" then
-		ColourNote("#FBFF00", "", "\n >> ", "#9AC7FE", "", "Winds of Fate", "silver", "", " cooldown is ", "white", "", winds, "silver", "", ".\n")
-	elseif winds > os.time() then
-		ColourNote("#FBFF00", "", "\n >> ", "#9AC7FE", "", "Winds of Fate", "silver", "", " is available on ", "white", "", os.date("%A at %I:%M:%S %p", winds), "silver", "", ".\n")
-	elseif winds < os.time() then
-		ColourNote("#FBFF00", "", "\n >> ", "#9AC7FE", "", "Winds of Fate", "silver", "", " is available ", "white", "", "now", "silver", "", "!", "gray", "", " ("..os.date("%A at %I:%M:%S %p", winds)..")\n")
-	elseif os.date("%m%d%Y", winds) == os.date("%m%d%Y", os.time()) then
-		ColourNote("#FBFF00", "", "\n >> ", "#9AC7FE", "", "Winds of Fate", "silver", "", " is available ", "white", "", os.date("Today at %I:%M:%S %p", winds), "silver", "", ".\n")
+	if cooldown == "unknown" then
+		ColourNote("#FBFF00", "", "\n >> ", "#9AC7FE", "", "Winds of Fate", "silver", "", " cooldown is ", "white", "", cooldown, "silver", "", ".\n")
+	elseif cooldown < os.time() then
+		ColourNote("#FBFF00", "", "\n >> ", "#9AC7FE", "", "Winds of Fate", "silver", "", " is available ", "white", "", "now", "silver", "", "!", "gray", "", " ("..os.date("%A at %I:%M:%S %p", cooldown)..")\n")
+	elseif os.date("%m%d%Y", cooldown) == os.date("%m%d%Y", os.time()) then
+		ColourNote("#FBFF00", "", "\n >> ", "#9AC7FE", "", "Winds of Fate", "silver", "", " is available ", "white", "", os.date("Today at %I:%M:%S %p", cooldown), "silver", "", ".\n")
+	elseif cooldown > os.time() then
+		ColourNote("#FBFF00", "", "\n >> ", "#9AC7FE", "", "Winds of Fate", "silver", "", " is available on ", "white", "", os.date("%A at %I:%M:%S %p", cooldown), "silver", "", ".\n")
 	end
 end
 
@@ -688,7 +760,8 @@ function go_try()
 end
 
 function OnPluginSaveState()
-	SetVariable("winds", winds)
+	SetVariable("start", start)
+	SetVariable("cooldown", cooldown)
 	SetVariable("cases", serialize.save_simple(cases))
 end
 
