@@ -217,6 +217,40 @@ commentz
    group="dupes"
   >
   </trigger>
+  
+  <trigger
+   enabled="y"
+   match="^A zombie gives (?<item>.+) to (?<player>.+)\.$"
+   regexp="y"
+   script="zombie_item"
+   sequence="101"
+   omit_from_output="n"
+   group="triggers"
+  >
+  </trigger>
+  <trigger
+   enabled="y"
+   match="^Aron, Servant of Orittias says 'I am sorry adventurers, but you need to have at least (?<required>\d+) items to complete this task\.'$"
+   regexp="y"
+   script="items_required"
+   sequence="101"
+   omit_from_output="n"
+   group="triggers"
+  >
+  </trigger>
+  <trigger
+   name="searches"
+   enabled="y"
+   match="^SET BY FUNCTION$"
+   regexp="y"
+   script="do_search"
+   sequence="101"
+   omit_from_output="n"
+   group="triggers"
+  >
+  </trigger>
+
+
 
 </triggers>
 
@@ -317,6 +351,8 @@ show_missing = tonumber(GetVariable("show_missing")) or 1
 dont_rename = false
 start = tonumber(GetVariable("start")) or os.time()
 cooldown = tonumber(GetVariable("cooldown")) or "unknown"
+items = {}
+required = 0 -- items required - sets if you try and fail
 
 -- Collector Case
 cards1 = {"Alessandrew", "Domain", "Original", "Alhena", "Evie", "Quadrapus", "Androg", "FatesDagger", "Rafaele", "Ani", "Galinthas", "Rau", "Bejito", "Gren", "Rezit", "Blurp", "Hank", "Rocky", "Bonjour", "Hiroki", "Ruiner", "Cadaver", "Jennie", "Saartje", "Cartman", "Leaf", "Speedster", "Chuft", "Linoge", "Stormlord", "Cordelia", "Lumina", "Tirica", "Craven", "Madcatz", "TrEz", "Curi", "Madrox", "Trollemite", "Dagonet", "Majic", "Vanion", "Dave", "Marauder", "Whisper", "Demonspawn", "Marc", "Wojmil", "Dereliction", "Moolb", "Yowza", "Dexter", "Ninja", "Zolstead", "DjVoltron", "Oladon"}
@@ -334,12 +370,54 @@ table.sort(cards3) -- sort alphabetically
 cards4 = {"Althalus", "Kalince", "Sagen", "Anaristos", "Kharpern", "Sirene", "Baejita", "Korridel", "Skarren", "Banichi", "Laren", "Styliann", "Broud", "Lao", "Sunset", "Cassin", "Lasher", "Sylvain", "Citron", "Maerchyng", "Tela", "Claire", "Marcon", "Tenchi", "Cynic", "Mashai", "Teoyaomqui", "Dadrake", "Methdemon", "Testasterone", "Darkmoore", "Moons", "Timeghost", "Dreamfyre", "Obyron", "Valkur", "Elisa", "OrcWarrior", "Velvet", "Entreri", "Paramore", "Vesuvius", "Fufa", "Penthesilea", "Vilgan", "Geneve", "Pointless", "Vitae", "Guinness", "Pudge", "Xeno", "Harvester", "Rhuli", "Yandros", "JustMe", "Rumour"}
 table.sort(cards4) -- sort alphabetically
 
+searches = {
+	["window.  The room is full of mud and sludge.  Most would sink to their knees"] = "search sludge",
+}
+
+function set_searches()
+	local match = "^(?<which>"
+	local cnt = 0
+	for msg, _ in pairs(searches) do
+		cnt = cnt + 1
+		if cnt > 1 then
+			match = match.."|"
+		end
+		match = match..msg
+	end
+	match = match..")$"
+	--Note(match)
+	SetTriggerOption("searches", "match", match)
+end
+
+function do_search(name, line, args)
+	local n = searches[args.which]
+	if n then
+		DoAfterSpecial(.2, "ColourNote('#FBFF00', '', ' >> ', '#9AC7FE', '', 'Winds of Fate', '#FBFF00', '', ' >> ', 'red', '', '"..n.."')", 12)
+	end
+end
+
 cases = {}
 local pvar = GetVariable("cases") or ""
 if pvar ~= "" then
 	cases = loadstring("return "..pvar)()
 end
 local tmp_cards = {}
+
+function zombie_item(name, line, args, styles)
+	table.insert(items, args.item)
+	if required > 0 then
+		Send("gtell @Y[@x075"..#items.."@D/@x075"..required.."@Y] @W"..args.item.."$C given to @W"..args.player.."$C")
+	else
+		Send("gtell @Y[@x075"..#items.."@Y] @W"..args.item.."$C given to @W"..args.player.."$C")
+	end
+end
+
+function items_required(name, line, args)
+	required = tonumber(args.required)
+	if required > #items then
+		Send("gtell @Y[@x075"..#items.."@D/@x075"..required.."@Y] @Witems so far.$C")
+	end
+end
 
 function toggle_show_missing()
 	show_missing = math.abs(show_missing - 1)
@@ -393,6 +471,8 @@ end
 
 function start_time()
 	start = os.time()
+	items = {} -- zombie items
+	required = 0
 	SaveState()
 end
 
@@ -460,7 +540,7 @@ function start_case()
 end
 
 function case_card(name, line, args)
-	tmp_cards[args.card] = 1
+	tmp_cards[string.lower(args.card)] = 1
 end
 
 function total_case(name, line, args)
@@ -480,7 +560,7 @@ function total_case(name, line, args)
 	if show_missing == 1 then
 		local cnt = 0
 		for i, card in ipairs(cards) do
-			if not tmp_cards[card] then
+			if not tmp_cards[string.lower(card)] then
 				cnt = cnt + 1
 				if cnt > 1 then
 					ColourTell("gray", "", ", ")
@@ -858,6 +938,8 @@ end
 
 EnableTriggerGroup("triggers", false)
 init_winds()
+set_searches()
+
 DoAfterSpecial(.2, "loaded()", 12)
 
 ]]>
