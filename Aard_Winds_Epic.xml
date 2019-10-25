@@ -219,7 +219,7 @@ commentz
   </trigger>
   
   <trigger
-   enabled="y"
+   enabled="n"
    match="^A zombie gives (?<item>.+) to (?<player>.+)\.$"
    regexp="y"
    script="zombie_item"
@@ -229,7 +229,7 @@ commentz
   >
   </trigger>
   <trigger
-   enabled="y"
+   enabled="n"
    match="^Aron, Servant of Orittias says 'I am sorry adventurers, but you need to have at least (?<required>\d+) items to complete this task\.'$"
    regexp="y"
    script="items_required"
@@ -240,7 +240,7 @@ commentz
   </trigger>
   <trigger
    name="searches"
-   enabled="y"
+   enabled="n"
    match="^SET BY FUNCTION$"
    regexp="y"
    script="do_search"
@@ -353,6 +353,8 @@ start = tonumber(GetVariable("start")) or os.time()
 cooldown = tonumber(GetVariable("cooldown")) or "unknown"
 items = {}
 required = 0 -- items required - sets if you try and fail
+attempts = {} -- player pedestal attempts
+
 
 -- Collector Case
 cards1 = {"Alessandrew", "Domain", "Original", "Alhena", "Evie", "Quadrapus", "Androg", "FatesDagger", "Rafaele", "Ani", "Galinthas", "Rau", "Bejito", "Gren", "Rezit", "Blurp", "Hank", "Rocky", "Bonjour", "Hiroki", "Ruiner", "Cadaver", "Jennie", "Saartje", "Cartman", "Leaf", "Speedster", "Chuft", "Linoge", "Stormlord", "Cordelia", "Lumina", "Tirica", "Craven", "Madcatz", "TrEz", "Curi", "Madrox", "Trollemite", "Dagonet", "Majic", "Vanion", "Dave", "Marauder", "Whisper", "Demonspawn", "Marc", "Wojmil", "Dereliction", "Moolb", "Yowza", "Dexter", "Ninja", "Zolstead", "DjVoltron", "Oladon"}
@@ -405,6 +407,9 @@ local tmp_cards = {}
 
 function zombie_item(name, line, args, styles)
 	table.insert(items, args.item)
+	if not leader then
+		return
+	end
 	if required > 0 then
 		Send("gtell @Y[@x075"..#items.."@D/@x075"..required.."@Y] @W"..args.item.."$C given to @W"..args.player.."$C")
 	else
@@ -472,11 +477,15 @@ end
 function start_time()
 	start = os.time()
 	items = {} -- zombie items
+	attempts = {} -- pedestal attempts
 	required = 0
 	SaveState()
 end
 
 function end_time()
+	if not leader then
+		return
+	end
 	local msg = chan.."@Y>> @x075Winds of Fate @Y>> @wFinished in @W"..total_time(os.time() - start, true).."@w.$C"
 	Send(msg)
 end
@@ -646,6 +655,36 @@ function got_pebble(name, line, args)
 	local msg = chan.."@Y>> @x075Winds of Fate @Y>> @wPebble was given to @W"..args.who..string.upper(args.m)..args.e.."@w.$C"
 	Send(msg)
 		--ColourNote("#FBFF00", "", "\n >> ", "#9AC7FE", "", "Winds of Fate", "#FBFF00", "", " >> ", "silver", "", "Pebble was given to ", "white", "", args.who, "silver", "", ".\n")
+	DoAfterSpecial(1, "report_attempts()", 12)
+end
+
+function in_attempts(player)
+	for i, p in ipairs(attempts) do
+		if p.player == player then
+			return true
+		end
+	end
+	return false
+end
+
+function report_attempts()
+	local msg = chan.."@Y>> @x075Winds of Fate @Y>> @RPedestal Shame Report: "
+	for i, p in ipairs(attempts) do
+		if i > 1 then
+			msg = msg.."@D, "
+		end
+		local c = "Y"
+		if tonumber(p.attempts) > 1 then
+			c = "G"
+		end
+		msg = msg.."@W"..p.player.."@D[@"..c..p.attempts.."@D]"
+	end
+	for i, p in ipairs(group.members) do
+		if not in_attempts(p.name) then
+			msg = msg.."@D, @W"..p.name.."@D[@R0@D]"
+		end
+	end
+	Send(msg)
 end
 
 function report_sides()
@@ -670,8 +709,19 @@ function report_winds()
 	end
 end
 
+function player_attempt(player)
+	for i, p in ipairs(attempts) do
+		if p.player == player then
+			p.attempts = p.attempts + 1
+			return
+		end
+	end
+	table.insert(attempts, {player = player, attempts = 1})
+end
+
 function player_pedestal(name, line, args)
 	player = args.player
+	player_attempt(player)
 	if cmd ~= "" then
 		ColourNote("#FBFF00", "", "\n >> ", "#9AC7FE", "", "Winds of Fate", "white", "", " cmd ", "silver", "", " cleared out because ", "white", "", player, "silver", "", " used it.\n")
 		cmd = ""
@@ -895,7 +945,7 @@ function OnPluginBroadcast (msg, id, name, text)
 					end
 				end
 			else
-				sitter = false
+				--sitter = false
 			end
 		end
 		if text == "group" then
