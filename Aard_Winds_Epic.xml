@@ -230,6 +230,16 @@ commentz
   </trigger>
   <trigger
    enabled="n"
+   match="^(?<player>You) receive (?<item>.+) from a zombie\.$"
+   regexp="y"
+   script="zombie_item"
+   sequence="101"
+   omit_from_output="n"
+   group="triggers"
+  >
+  </trigger>
+  <trigger
+   enabled="n"
    match="^Aron, Servant of Orittias says 'I am sorry adventurers, but you need to have at least (?<required>\d+) items to complete this task\.'$"
    regexp="y"
    script="items_required"
@@ -336,6 +346,7 @@ function init_winds()
 	side4 = {[1] = {word = "yli"}, [2] = {word = "etele"}, [3] = {word = "zin"}, [4] = {word = "juja"}, [5] = {word = "quitis"}, [6] = {word = "bevij"}, [7] = {word = "sjisji"}, [8] = {word = "jajar"}}
 end
 
+me = nil
 chan = "gtell :"
 dupes_chan = ""
 room_info = 1
@@ -409,6 +420,9 @@ function zombie_item(name, line, args, styles)
 	table.insert(items, args.item)
 	if not leader then
 		return
+	end
+	if args.player == "You" then
+		args.player = "Me"
 	end
 	if required > 0 then
 		Send("gtell @Y[@x075"..#items.."@D/@x075"..required.."@Y] @W"..args.item.."$C given to @W"..args.player.."$C")
@@ -683,7 +697,7 @@ function report_attempts()
 		msg = msg.."@W"..p.player.."@D[@"..c..p.attempts.."@D]"
 	end
 	for i, p in ipairs(group.members) do
-		if not in_attempts(p.name) then
+		if p.name ~= me and not in_attempts(p.name) then
 			msg = msg.."@D, @W"..p.name.."@D[@R0@D]"
 		end
 	end
@@ -955,7 +969,10 @@ function OnPluginBroadcast (msg, id, name, text)
 			if gmcp then
 				--DebugNote({"updated handler - getting group info"})
 				group = gmcp("group")
-				if group.leader == gmcp("char.base.name") then
+				if not me then
+					me = gmcp("char.base.name")
+				end
+				if group.leader == me then
 					leader = true
 				else
 					leader = false
@@ -965,8 +982,11 @@ function OnPluginBroadcast (msg, id, name, text)
 				--DebugNote({"legacy handler - getting group info"})
 				any, p = CallPlugin("3e7dedbe37e44942dd46d264", "gmcpval", "group")
 				group = loadstring("return "..p)()
-				any, p = CallPlugin("3e7dedbe37e44942dd46d264", "gmcpval", "char.base.name")
-				if group.leader == p then
+				if not me then
+					any, p = CallPlugin("3e7dedbe37e44942dd46d264", "gmcpval", "char.base.name")
+					me = p
+				end
+				if group.leader == me then
 					--DebugNote({"leader: ", group.leader, " me: ", p})
 					--DebugNote({"I am leader"})
 					leader = true
