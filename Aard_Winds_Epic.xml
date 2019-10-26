@@ -419,6 +419,9 @@ end
 
 function items_required(name, line, args)
 	required = tonumber(args.required)
+	if not leader then
+		return
+	end
 	if required > #items then
 		Send("gtell @Y[@x075"..#items.."@D/@x075"..required.."@Y] @Witems so far.$C")
 	end
@@ -692,7 +695,7 @@ function report_sides()
 end
 
 function set_cooldown()
-	cooldown = os.time() + 30 * 60 * 60
+	cooldown = os.time() + (30 * 60 * 60)
 	SaveState()
 	DoAfterSpecial(1, "report_winds()", 12)
 end
