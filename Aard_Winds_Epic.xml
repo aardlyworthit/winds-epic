@@ -962,7 +962,7 @@ function OnPluginBroadcast (msg, id, name, text)
 					end
 				end
 			else
-				--sitter = false
+				sitter = false
 			end
 		end
 		if text == "group" then
